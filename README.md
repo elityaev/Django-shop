@@ -69,7 +69,11 @@ pip install -r requirements.txt
 cd src
 python manage.py migrate
 ```
-3. Запустить проект
+3. Создать суперпользователя и через админку заполнить БД (категории, подкатегории, продукты)
+```shell
+python manage.py createsuperuser
+```
+4. Запустить проект
 ```shell
 python manage.py runserver
 ```
