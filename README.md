@@ -47,7 +47,7 @@ Django-проект API для магазина продуктов
 Для Windows:
 
 ```shell
-git git@github.com:elityaev/Django-shop.git
+git clone git@github.com:elityaev/Django-shop.git
 cd Django-shop
 python -m venv venv
 venv/Scripts/activate
@@ -57,7 +57,7 @@ pip install -r requirements.txt
 Для Linux:
 
 ```shell
-git git@github.com:elityaev/Django-shop.git
+git clone git@github.com:elityaev/Django-shop.git
 cd Django-shop
 python3 -m venv venv
 source venv/bin/activat
