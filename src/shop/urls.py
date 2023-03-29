@@ -4,18 +4,21 @@ from rest_framework.routers import DefaultRouter
 from .views import (
    CategoriesWithSubcategoriesList,
    ProductViewSet,
-   CartView
+   CartViewSet,
+   CartItemViewSet,
 )
 
 router = DefaultRouter()
 
-router.register('products', ProductViewSet)
+router.register(r'categories', CategoriesWithSubcategoriesList)
+router.register(r'products', ProductViewSet)
+router.register('cart', CartViewSet)
+router.register(
+   r'cart/(?P<cart_id>\d+)/cart_item',
+   CartItemViewSet, basename='cart_item'
+)
 
 
 urlpatterns = [
-   path(
-      'categories/', CategoriesWithSubcategoriesList.as_view({'get': 'list'})
-   ),
-   path('cart/', CartView.as_view()),
    path('', include(router.urls)),
 ]

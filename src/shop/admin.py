@@ -17,15 +17,15 @@ class SubcategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ('name', 'price', 'subcategory', 'slug')
+    list_display = ('id', 'name', 'price', 'subcategory', 'slug')
     prepopulated_fields = {'slug': ('name',)}
 
 
 @admin.register(Cart)
 class CartAdmin(admin.ModelAdmin):
-    list_display = ('customer', 'total_price', 'total_count')
+    list_display = ('id', 'customer', 'total_price', 'total_count')
 
 
 @admin.register(CartItem)
-class CartProductAdmin(admin.ModelAdmin):
-    list_display = ('cart', 'product', 'count', 'price')
+class CartItemAdmin(admin.ModelAdmin):
+    list_display = ('id', 'cart', 'product', 'count', 'price')

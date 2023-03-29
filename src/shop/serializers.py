@@ -78,26 +78,59 @@ class CartItemSerializer(serializers.ModelSerializer):
     Формирует данные для добавления нового товара в корзину и
     изменения количества товара, находящегося уже в корзине.
     """
+    cart = serializers.PrimaryKeyRelatedField(
+        queryset=Cart.objects.all(), required=False
+    )
+
     class Meta:
         model = CartItem
         fields = ('cart', 'product', 'count', 'price')
 
     def validate(self, data):
         """Предотвращает повторное добавление нового товара в корзину"""
-        if self.context.method == 'POST':
+        if self.context.get('request').method == 'POST':
             if CartItem.objects.filter(
-                    cart=self.initial_data['cart'], product=self.initial_data['product']
+                    cart=data.get('cart').id, product=data.get('product')
             ).exists():
                 raise ValidationError(
-                    'Этот продукт уже есть в корзине, можно только изменить его количество'
+                    'Этот продукт уже есть в корзине, '
+                    'можно только изменить его количество'
+                )
+            if data.get('count') <= 0:
+                raise ValidationError(
+                    'Количество добавляемого в корзину '
+                    'товара не может быть меньше или равно 0'
                 )
         return data
+
+    def create(self, validated_data):
+        cart = Cart.objects.get(id=validated_data.get('cart_id'))
+        product = validated_data.get('product')
+        count = validated_data.get('count')
+        price = product.price * count
+        cart_item = CartItem.objects.create(
+            cart=cart, product=product, count=count, price=price
+        )
+        return cart_item
+
+    def update(self, instance, validated_data):
+        count = validated_data.get('count')
+        product = Product.objects.get(id=instance.product.id)
+        instance.count = count + instance.count
+        instance.price = product.price * instance.count
+        if instance.count <= 0:
+            instance.delete()
+        else:
+            instance.save()
+        return instance
 
 
 class CartSerializer(serializers.ModelSerializer):
     """Формирует список товаров, добавленных в корзину
-    с подсчетом их общей суммы и количества. Для подробного описания продуктов
-    поле products формируется через CartItemProductSerializer."""
+    с подсчетом их общей суммы и количества. Для
+    подробного описания продуктов поле products формируется
+    через CartItemProductSerializer.
+    """
     products = serializers.SerializerMethodField()
 
     class Meta:
@@ -106,5 +139,7 @@ class CartSerializer(serializers.ModelSerializer):
 
     def get_products(self, obj):
         return CartItemProductSerializer(
-            CartItem.objects.filter(cart=obj), context=self.context, many=True
+            CartItem.objects.filter(cart=obj),
+            context=self.context,
+            many=True
         ).data

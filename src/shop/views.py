@@ -1,18 +1,14 @@
-from rest_framework import viewsets, status
-from rest_framework.generics import get_object_or_404, GenericAPIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework import viewsets, status, mixins
+from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 
-from .models import Category, Product, Cart, CartItem
+from .models import Category, Product, Cart
+from .permissions import IsCartOwner, IsCartOwnerForCartItems
 from .serializers import (
     CategorySerializer,
     ProductSerializer,
     CartItemSerializer,
     CartSerializer
-)
-from .services import (
-    get_cart_and_product,
-    cart_price_count_update
 )
 
 
@@ -28,83 +24,60 @@ class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = ProductSerializer
 
 
-class CartView(GenericAPIView):
+class CartViewSet(mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """Получить состав корзины с общей стоимость и
+    количеством продуктов.
     """
-    Операции с корзиной (доступно только авторизованным
-    пользователям и только со своей корзиной).
-    """
-    permission_classes = (IsAuthenticated,)
+    queryset = Cart.objects.all()
+    permission_classes = (IsCartOwner,)
     serializer_class = CartSerializer
 
-    def get(self, request):
-        """
-        Возвращает состав корзины текущего пользователя с
-        подсчетом количества товаров и суммы стоимости товаров.
-        """
-        cart = Cart.objects.get(customer=request.user)
-        serializer = CartSerializer(cart, context=request)
-        return Response(serializer.data, status=status.HTTP_200_OK)
 
-    def post(self, request):
-        """
-        Добавляет новый товар в корзину.
-        Query parameters:
-        - products: int,
-        - count: int
-        """
-        try:
-            _ = request.data['product']
-            count = request.data['count']
-        except KeyError as error:
-            return Response({'message': f'Не передан обязательный аргумент - {error}'})
+class CartItemViewSet(
+    mixins.CreateModelMixin, mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin, viewsets.GenericViewSet
+):
+    """Добавить продукт в корзину, изменить количество,
+    отчистить корзину полностью.
+    """
+    serializer_class = CartItemSerializer
+    permission_classes = (IsCartOwnerForCartItems,)
 
-        cart, product = get_cart_and_product(request)
-        request.data['price'] = product.price * count
-        request.data['cart'] = cart.id
-        serializer = CartItemSerializer(data=request.data, context=request)
+    def get_queryset(self):
+        cart = get_object_or_404(Cart, id=self.kwargs.get('cart_id'))
+        queryset = cart.cart_items.all()
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(
+            cart_id=self.kwargs.get('cart_id')
+        )
+
+    def create(self, request, *args, **kwargs):
+        request.data['cart'] = self.kwargs.get('cart_id')
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-        cart_price_count_update(cart)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            serializer.data, status=status.HTTP_201_CREATED, headers=headers
+        )
 
-    def patch(self, request):
-        """Изменяет количество товара в корзине
-
-        Query parameters:
-        - products: int,
-        - count: int (-int при уменьшении количества)
-
-        При передаче в запросе значение count больше чем
-        количество товара в корзине, товар удаляется.
-        """
-        try:
-            _ = request.data['product']
-            count = request.data['count']
-        except KeyError as error:
-            return Response({'message': f'Не передан обязательный аргумент - {error}'})
-
-        cart, product = get_cart_and_product(request)
-        cart_item = get_object_or_404(CartItem, cart=cart, product=product)
-        count = cart_item.count + count
-        if count <= 0:
-            cart_item.delete()
-            cart_price_count_update(cart)
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(
+            instance, data=request.data, partial=partial
+        )
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if instance.id is None:
             return Response(status=status.HTTP_204_NO_CONTENT)
-        else:
-            price = product.price * count
-            request.data['price'] = price
-            request.data['count'] = count
-            serializer = CartItemSerializer(
-                cart_item, data=request.data, context=request, partial=True)
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-            cart_price_count_update(cart)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        return Response(serializer.data)
 
-    def delete(self, request):
-        """Полная отчистка корзины."""
-        cart = Cart.objects.get(customer=request.user.id)
-        CartItem.objects.filter(cart=cart).delete()
-        cart_price_count_update(cart)
-        serializer = CartSerializer(cart)
-        return Response(serializer.data, status=status.HTTP_204_NO_CONTENT)
+    def delete(self, request, *args, **kwargs):
+        instance = self.get_queryset()
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
