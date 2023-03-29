@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status, mixins
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
+from rest_framework.viewsets import GenericViewSet
 
 from .models import Category, Product, Cart
 from .permissions import IsCartOwner, IsCartOwnerForCartItems
@@ -12,13 +13,13 @@ from .serializers import (
 )
 
 
-class CategoriesWithSubcategoriesList(viewsets.ReadOnlyModelViewSet):
+class CategoriesWithSubcategoriesList(mixins.ListModelMixin, GenericViewSet):
     """Получить список всех категорий с подкатегориями."""
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
 
 
-class ProductViewSet(viewsets.ReadOnlyModelViewSet):
+class ProductViewSet(mixins.ListModelMixin, GenericViewSet):
     """Получить список всех продуктов."""
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
@@ -54,6 +55,7 @@ class CartItemViewSet(
         )
 
     def create(self, request, *args, **kwargs):
+        """Добавить продукты в корзину"""
         request.data['cart'] = self.kwargs.get('cart_id')
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -64,6 +66,7 @@ class CartItemViewSet(
         )
 
     def update(self, request, *args, **kwargs):
+        """Изменить количество продукта в корзине"""
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
         serializer = self.get_serializer(
@@ -78,6 +81,7 @@ class CartItemViewSet(
         return Response(serializer.data)
 
     def delete(self, request, *args, **kwargs):
+        """Отчистить корзину полностью."""
         instance = self.get_queryset()
         self.perform_destroy(instance)
         return Response(status=status.HTTP_204_NO_CONTENT)
